@@ -1,0 +1,30 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python -m src.data.prepare
+    deps:
+    - path: src/config.py
+      hash: md5
+      md5: 2f48db1ad4ca1089bf2f4f626622fd31
+      size: 1461
+    - path: src/data/prepare.py
+      hash: md5
+      md5: cf9185fce071b448d58618ac84b5a000
+      size: 1665
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 7795b2f4763bf5167120cdb6224d6962
+      size: 328343
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 42266adc41af554458271c7993261333
+      size: 2196852
+    - path: data/processed/val.csv
+      hash: md5
+      md5: b5f333adeaac2202d44e7c3aadd6a76d
+      size: 298545
+    - path: data/raw/reviews.csv
+      hash: md5
+      md5: 9e30bce4d2fc21b1befb6c7cbd5094b6
+      size: 54558842

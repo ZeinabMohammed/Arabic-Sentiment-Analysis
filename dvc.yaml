@@ -1,0 +1,25 @@
+stages:
+  prepare:
+    cmd: python -m src.data.prepare
+    deps:
+      - src/data/prepare.py
+      - src/config.py
+    outs:
+      - data/raw/reviews.csv
+      - data/processed/train.csv
+      - data/processed/val.csv
+      - data/processed/test.csv
+
+  train:
+    cmd: >-
+      python -m src.training.train --train-limit 150 --val-limit 50
+      --epochs 1 --batch-size 8 --run-name dvc-repro
+      --metrics-out reports/train_metrics.json
+    deps:
+      - src/training/train.py
+      - src/models/sentiment_model.py
+      - data/processed/train.csv
+      - data/processed/val.csv
+    metrics:
+      - reports/train_metrics.json:
+          cache: false

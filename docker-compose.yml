@@ -6,3 +6,14 @@ services:
       MODEL_VERSION: stable
     ports:
       - "8000:8000"
+
+  mlflow:
+    build: .
+    entrypoint: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000",
+                 "--backend-store-uri", "sqlite:////app/mlflow.db",
+                 "--default-artifact-root", "/app/mlartifacts"]
+    volumes:
+      - ./mlflow.db:/app/mlflow.db
+      - ./mlartifacts:/app/mlartifacts
+    ports:
+      - "5000:5000"
