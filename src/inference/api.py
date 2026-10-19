@@ -22,6 +22,9 @@ from src.models.sentiment_model import ArabicSentimentModel
 
 MODEL_PATH = os.environ.get("MODEL_PATH", BASE_MODEL_NAME)
 MODEL_VERSION = os.environ.get("MODEL_VERSION", "dev")
+# "torch" (default) or "onnx" — see src/optimization/export_onnx.py for how the
+# .onnx file referenced by MODEL_PATH is produced.
+MODEL_ENGINE = os.environ.get("MODEL_ENGINE", "torch")
 
 _model: ArabicSentimentModel | None = None
 
@@ -29,7 +32,12 @@ _model: ArabicSentimentModel | None = None
 def get_model() -> ArabicSentimentModel:
     global _model
     if _model is None:
-        _model = ArabicSentimentModel(MODEL_PATH, version=MODEL_VERSION)
+        if MODEL_ENGINE == "onnx":
+            from src.models.onnx_sentiment_model import OnnxSentimentModel
+
+            _model = OnnxSentimentModel(MODEL_PATH, version=MODEL_VERSION)
+        else:
+            _model = ArabicSentimentModel(MODEL_PATH, version=MODEL_VERSION)
     return _model
 
 
@@ -47,6 +55,7 @@ REQUEST_LATENCY = Histogram(
     buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
 )
 REQUEST_COUNT = Counter("predict_requests_total", "Total /predict requests", ["label"])
+
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:

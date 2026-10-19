@@ -105,3 +105,28 @@ Browse the MLflow UI against the same local run store:
 ```bash
 mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlartifacts
 ```
+
+## Session 3 — Serving, load testing, canary
+
+- `bentoml serve src.serving.bento_service:ArabicSentimentService` — a `/predict` API
+  with `batchable=True` (micro-batches concurrent requests into one forward pass).
+- `src/optimization/export_onnx.py` — **TensorRT substitute**: this project has no
+  NVIDIA GPU (TensorRT needs one), so ONNX Runtime is the serving-acceleration path
+  instead. The script exports + verifies the model against PyTorch and prints the
+  `trtexec --fp16` command to build a real TensorRT engine from the same `.onnx` file
+  on a GPU box.
+- `src/inference/batch_score.py` — scores ≥1,000 unlabeled reviews, writes
+  `data/scoring/output/scored_<ts>.csv` (adds `text_length`/`confidence_score`, the
+  features S4 watches for drift).
+- `locustfile.py` + `reports/locust_fastapi.html` / `reports/locust_onnx.html` — load
+  test at 20 concurrent users. **Honest result**: on this (GPU-less, Apple Silicon)
+  dev machine, the naive per-request ONNX Runtime path was *slower* under concurrency
+  (p95 ≈ 1.2s) than native PyTorch CPU inference (p95 ≈ 0.12s) — single-request ONNX
+  latency is fine (~200ms), but N concurrent synchronous ONNX calls contend for the
+  same cores. That's exactly what BentoML's batchable Runner is for: it coalesces
+  concurrent requests into one batched forward pass instead of N competing ones. Don't
+  expect ONNX/TensorRT to be a free win without batching — benchmark before and after,
+  like this report does.
+- `nginx/canary.conf` + `docker-compose.yml` (`api-stable` 95% / `api-canary` 5%,
+  fronted by nginx on `:8080`) — promote a candidate by raising its weight in stages:
+  5 → 25 → 50 → 100, watching the Grafana dashboard (Session 4) between each stage.
