@@ -1,0 +1,8 @@
+services:
+  api-stable:
+    build: .
+    environment:
+      MODEL_PATH: ${STABLE_MODEL_PATH:-aubmindlab/bert-base-arabertv02}
+      MODEL_VERSION: stable
+    ports:
+      - "8000:8000"

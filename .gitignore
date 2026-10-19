@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.env
+data/raw/*
+data/processed/*
+data/scoring/output/*
+.DS_Store
+
+# MLflow local tracking store (sqlite backend + artifacts) — not committed,
+# regenerate with `python -m src.training.sweep`. Point MLFLOW_TRACKING_URI
+# at the docker-compose "mlflow" service to browse runs in the UI instead.
+mlflow.db
+mlartifacts/
+mlruns/
+
+# Large model binaries are tracked via MLflow Model Registry / DVC, not git —
+# see README "Model artifacts" for how to fetch them. (Anchored to repo root
+# so it doesn't shadow the src/models/ Python package.)
+/models/
+*.onnx
+*.safetensors
+
