@@ -156,3 +156,82 @@ python -m src.inference.batch_score --n-samples 1000
 python -m src.monitoring.drift
 # refresh Grafana — PSI panel updates on the next scrape (15s)
 ```
+
+## Session 5 — Distillation, quantization, final benchmark
+
+- `src/optimization/distill.py` — 12-layer AraBERT teacher → 6-layer student (DistilBERT-
+  style init: copy embeddings + every other encoder layer, then fine-tune with
+  `0.5·KL(teacher‖student, T=2) + 0.5·cross_entropy`). Logged to MLflow as
+  `distill-12to6`; student saved to `models/distilled/` (not committed — see "Model
+  artifacts").
+- `src/optimization/export_onnx.py` + `src/optimization/quantize.py` — FP32 ONNX export,
+  then `quantize_dynamic(..., QInt8)` → `models/model_int8.onnx`.
+- `src/optimization/benchmark.py` — accuracy/f1_macro, p95 single-request latency, and
+  file size for all three, on the validation split. Real numbers from this (GPU-less,
+  smoke-scale-trained) environment:
+
+| model                      | accuracy | f1_macro | p95 latency (ms) | size (MB) |
+|-----------------------------|---------:|---------:|------------------:|----------:|
+| original (fp32, torch)     | 0.48     | 0.47     | 73.0              | 541.0     |
+| distilled (6-layer, torch) | 0.43     | 0.24     | 41.4              | 372.5     |
+| INT8 (ONNX Runtime)        | 0.30     | 0.27     | 73.3              | 136.0     |
+
+  (regenerate with `python -m src.optimization.benchmark` → `reports/benchmark.md`)
+
+  **Honest read**: distillation gave a real, clean win — fewer layers, ~1.8x faster,
+  smaller — at an accuracy cost that should be re-measured once the model is actually
+  trained to convergence (these numbers come from the same small-subsample/short-epoch
+  smoke run used throughout this repo, not a converged model). INT8 quantization gave
+  a strong ~4x size reduction but **no latency win on this CPU** — consistent with
+  Session 3's finding that ONNX Runtime isn't automatically faster than PyTorch's CPU
+  kernels here; the real payoff of both optimizations needs either a GPU (true
+  TensorRT INT8/FP16 kernels) or request batching (BentoML Runner) to show up in
+  latency, not just file size.
+
+### Final architecture (all 5 sessions)
+
+```
+                         ┌────────────────────────────┐
+                         │        data/raw.csv         │
+                         │  (DVC-tracked, HF dataset)   │
+                         └──────────────┬───────────────┘
+                                        │ prepare.py (DVC "prepare" stage)
+                                        ▼
+                         ┌────────────────────────────┐
+                         │ data/processed/{train,val,  │
+                         │ test}.csv (DVC)              │
+                         └──────────────┬───────────────┘
+                                        │
+                     ┌──────────────────┼───────────────────┐
+                     ▼                  ▼                   ▼
+            train.py / sweep.py   distill.py          export_onnx.py
+            (S2: MLflow runs)     (S5: 6-layer)        → quantize.py (S5: INT8)
+                     │                  │                   │
+                     └─────────┬────────┴─────────┬─────────┘
+                                ▼                  ▼
+                     MLflow Model Registry   models/*.onnx
+                     "ArabicSentiment"       (gitignored — see
+                     → Production stage      "Model artifacts")
+                                │
+                                ▼
+          ┌─────────────────────────────────────────────┐
+          │  FastAPI (S1) / BentoML batchable (S3)        │
+          │  MODEL_ENGINE=torch|onnx, MODEL_PATH=...       │
+          └───────────────────┬────────────────────────┘
+                               │ nginx canary 95/5 (S3)
+                               ▼
+          ┌─────────────────────────────────────────────┐
+          │ /metrics ──▶ Prometheus ──▶ Grafana (S4)      │
+          │ batch_score.py ──▶ drift.py (PSI) ──▶ exporter │
+          └─────────────────────────────────────────────┘
+```
+
+### Session changelog
+
+| Session | Delivered |
+|---------|-----------|
+| 1 | Packaged src/, AraBERT wrapper, FastAPI `/predict` + `/health`, Docker |
+| 2 | MLflow 5-run sweep + registry promotion, DVC pipeline, CI quality gate |
+| 3 | BentoML batchable serving, ONNX export (TensorRT substitute), canary, Locust |
+| 4 | PSI drift detection, Prometheus metrics, Grafana dashboard |
+| 5 | 6-layer distillation, INT8 quantization, benchmark table, this architecture diagram |
