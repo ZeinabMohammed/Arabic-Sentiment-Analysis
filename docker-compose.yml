@@ -35,3 +35,34 @@ services:
       - ./mlartifacts:/app/mlartifacts
     ports:
       - "5000:5000"
+
+  drift-exporter:
+    build: .
+    entrypoint: ["python", "-m", "src.monitoring.metrics_exporter"]
+    volumes:
+      - ./reports:/app/reports
+    ports:
+      - "9100:9100"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api-stable
+      - api-canary
+      - drift-exporter
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus

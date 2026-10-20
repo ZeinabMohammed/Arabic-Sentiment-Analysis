@@ -130,3 +130,29 @@ mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./
 - `nginx/canary.conf` + `docker-compose.yml` (`api-stable` 95% / `api-canary` 5%,
   fronted by nginx on `:8080`) — promote a candidate by raising its weight in stages:
   5 → 25 → 50 → 100, watching the Grafana dashboard (Session 4) between each stage.
+
+## Session 4 — Drift detection and observability
+
+- `src/monitoring/drift.py` computes **PSI** (Population Stability Index) on
+  `text_length` and `confidence_score` from the latest batch-scoring run
+  (`python -m src.monitoring.drift`), writes `reports/psi_scores.json`, and also runs
+  an Evidently `DataDriftPreset` report to `reports/evidently_drift_report.html`.
+- `src/monitoring/metrics_exporter.py` republishes `reports/psi_scores.json` as a
+  Prometheus gauge (`arabic_sentiment_psi_score{feature=...}`) on `:9100/metrics` —
+  live, no restart needed when a new batch is scored.
+- `/predict` itself exposes `predict_latency_seconds` (histogram) and
+  `predict_requests_total` on `:8000/metrics`.
+- Grafana (`:3000`, admin/admin) is provisioned with 2 panels: `/predict` p95 latency
+  (split by `stable`/`canary` track) and PSI per feature, with a red threshold line at
+  `DRIFT_PSI_ALERT_THRESHOLD = 0.25` (`src/config.py`).
+- **Alert**: PSI > 0.25 on either feature is flagged by `drift.py` at the CLI
+  (`ALERT` vs `ok`) and crosses the red threshold in Grafana's PSI panel — wire this to
+  Grafana Alerting → Slack/email in a real deployment (see `monitoring/grafana/`).
+
+Run the monitoring stack:
+```bash
+docker compose up prometheus grafana drift-exporter
+python -m src.inference.batch_score --n-samples 1000
+python -m src.monitoring.drift
+# refresh Grafana — PSI panel updates on the next scrape (15s)
+```
