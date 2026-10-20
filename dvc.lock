@@ -28,3 +28,29 @@ stages:
       hash: md5
       md5: 9e30bce4d2fc21b1befb6c7cbd5094b6
       size: 54558842
+  train:
+    cmd: python -m src.training.train --train-limit 150 --val-limit 50 --epochs 
+      1 --batch-size 8 --run-name dvc-repro --metrics-out 
+      reports/train_metrics.json
+    deps:
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 42266adc41af554458271c7993261333
+      size: 2196852
+    - path: data/processed/val.csv
+      hash: md5
+      md5: b5f333adeaac2202d44e7c3aadd6a76d
+      size: 298545
+    - path: src/models/sentiment_model.py
+      hash: md5
+      md5: d821df6bf7e5f2a4b31dd18fb65b92da
+      size: 2338
+    - path: src/training/train.py
+      hash: md5
+      md5: 8c390128ddeba188630a348fc5c2ff6c
+      size: 6154
+    outs:
+    - path: reports/train_metrics.json
+      hash: md5
+      md5: 0db62c58251078a52d0e9e5249e51852
+      size: 57
